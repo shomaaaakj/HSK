@@ -232,6 +232,54 @@
   .bubble.A{background:rgba(63,107,91,0.10); border:1px solid rgba(63,107,91,0.25); border-bottom-left-radius:3px;}
   .bubble.B{background:rgba(166,58,46,0.08); border:1px solid rgba(166,58,46,0.22); margin-left:auto; border-bottom-right-radius:3px;}
 
+  /* ---- 読み物(試作) ---- */
+  .reading-link{
+    margin:18px 0 0; padding:14px 16px; border-radius:14px;
+    background:linear-gradient(135deg, rgba(63,107,91,0.10), rgba(154,123,63,0.08));
+    border:1px solid rgba(63,107,91,0.22); cursor:pointer;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .reading-link:active{transform:scale(0.99);}
+  .reading-link-title{font-family:'Noto Serif SC',serif; font-weight:700; font-size:14px;}
+  .reading-link-sub{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
+  .reading-link-arrow{font-size:18px; color:var(--jade);}
+  .passage-card{
+    margin-bottom:26px; padding:16px 16px 18px; border-radius:16px;
+    background:var(--card-bg); border:1px solid var(--line);
+  }
+  .passage-head{display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
+  .passage-type{
+    font-size:11px; font-weight:700; color:#fff; background:var(--jade);
+    padding:3px 9px; border-radius:20px; letter-spacing:.05em;
+  }
+  .passage-title{font-family:'Noto Serif SC',serif; font-weight:700; font-size:16px;}
+  .jp-toggle{
+    margin-left:auto; font-size:11px; padding:4px 10px; border-radius:20px;
+    background:rgba(34,32,28,0.06); border:1px solid var(--line); color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .jp-toggle.on{background:rgba(63,107,91,0.14); border-color:rgba(63,107,91,0.3); color:var(--jade-deep);}
+  .ex-jp.jp-hidden, .bubble .jp.jp-hidden{display:none;}
+  .passage-words{
+    margin-top:14px; padding-top:12px; border-top:1px dashed var(--line);
+    display:flex; flex-wrap:wrap; gap:6px;
+  }
+  .passage-words-label{width:100%; font-size:11px; color:var(--ink-soft); margin-bottom:4px;}
+  .passage-word-chip{
+    font-size:12px; padding:3px 10px; border-radius:20px;
+    background:rgba(63,107,91,0.08); border:1px solid rgba(63,107,91,0.2);
+    color:var(--jade-deep); cursor:pointer;
+  }
+  .passage-word-chip:active{background:rgba(63,107,91,0.18);}
+  .passage-newwords{
+    margin-top:10px; padding:10px 12px; border-radius:10px;
+    background:rgba(166,58,46,0.06); border:1px solid rgba(166,58,46,0.18);
+  }
+  .passage-newwords-label{font-weight:700; color:var(--seal); margin-bottom:6px; font-size:11px;}
+  .newword-row{display:flex; gap:8px; font-size:12px; padding:3px 0; flex-wrap:wrap;}
+  .newword-cn{font-weight:600;}
+  .newword-py{color:var(--jade-deep);}
+  .newword-jp{color:var(--ink-soft);}
   .speak-btn{
     display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; flex-shrink:0;
     border-radius:50%; border:1.5px solid var(--line); background:rgba(255,255,255,0.4);
@@ -250,7 +298,7 @@
 <header id="appHeader">
   <div class="eyebrow">HSK考试大纲(2025-11発布)準拠</div>
   <h1>語<span class="accent">階</span>HSK</h1>
-  <p class="sub">HSK1〜6級の公式词汇大纲5400語を全540課で収録。同じ課に発音の近い単語が固まらないよう、公式リストから等間隔に抜き出して構成しています。やった課は黒く印がつき、テストで「分からない」だった単語は自動でまとまって復習できます。</p>
+  <p class="sub">HSK1〜9級の公式词汇大纲11000語を全1100課で収録。同じ課に発音の近い単語が固まらないよう、公式リストから等間隔に抜き出して構成しています。やった課は黒く印がつき、テストで「分からない」だった単語は自動でまとまって復習できます。</p>
 </header>
 
 <main>
@@ -294,6 +342,7 @@
       <div class="cat" id="secCat"></div>
       <h2 id="secTitle"></h2>
     </div>
+    <div id="secReadingLink"></div>
 
     <div id="secLocked" class="locked-msg" style="display:none;">
       この課はまだ準備中です。<br>単語・例文・会話・テストは今後追加していきます。
@@ -322,6 +371,13 @@
         <div class="deck-stage" id="quizStage"></div>
       </section>
     </div>
+  </div>
+
+  <!-- READING PASSAGES (試作) -->
+  <div class="view" id="view-reading">
+    <button class="back-btn" id="backFromReading">← 課に戻る</button>
+    <div class="sec-header"><div class="cat" id="readingCat">既習語彙を中心に書いた読み物(試作)</div><h2 id="readingTitle">読み物</h2></div>
+    <div id="readingBody"></div>
   </div>
 
   <!-- REVIEW -->
@@ -357,7 +413,7 @@
   <p class="no-voice-note" id="storageNote">⚠ このブラウザでは保存ができないようです(プライベートブラウズ中など)。今回だけは進捗が保存されない可能性があります。</p>
 </main>
 
-<footer>中国人と暮らす中国語500 プロジェクト ・ 進捗はこのブラウザに保存されます</footer>
+<footer>語階HSK ・ 進捗はこのブラウザに保存されます</footer>
 
 <script>
 /* ===================== セクション一覧(骨格) ===================== */
@@ -53980,6 +54036,66 @@ const sectionsData = {
   }
 };
 
+
+
+/* ===================== 読み物データ(試作) ===================== */
+const passagesData = [
+  {
+    moduleId: "m1_5",
+    type: "对话",
+    title: "打招呼",
+    lines: [
+      ["A","你好!你叫什么名字?","nǐ hǎo! nǐ jiào shénme míngzi?","こんにちは!お名前は?"],
+      ["B","我叫王芳,是新同学。你叫什么名字?","wǒ jiào Wáng Fāng, shì xīn tóngxué. nǐ jiào shénme míngzi?","王芳といいます、新しいクラスメートです。あなたは?"],
+      ["A","我叫李明,很高兴认识你!","wǒ jiào Lǐ Míng, hěn gāoxìng rènshi nǐ!","李明です、知り合えて嬉しいです!"],
+      ["B","谢谢,我也很高兴认识你。我们是同学了!","xièxie, wǒ yě hěn gāoxìng rènshi nǐ. wǒmen shì tóngxué le!","ありがとう、私も嬉しいです。私たちクラスメートですね!"],
+      ["A","对,我们是同学。你爱学习吗?","duì, wǒmen shì tóngxué. nǐ ài xuéxí ma?","そうですね、同学です。勉強は好きですか?"],
+      ["B","爱!我很爱学习,也喜欢新同学。","ài! wǒ hěn ài xuéxí, yě xǐhuan xīn tóngxué.","好きです!勉強が大好きで、新しいクラスメートも好きです。"],
+      ["A","太好了!啊,对不起,我不小心撞到你了。","tài hǎo le! a, duìbuqǐ, wǒ bù xiǎoxīn zhuàngdào nǐ le.","良かった!あ、ごめんなさい、うっかりぶつかっちゃいました。"],
+      ["B","没事,没事!我们再见吧!","méishì, méishì! wǒmen zàijiàn ba!","大丈夫、大丈夫!それじゃあまたね!"],
+      ["A","好,再见!","hǎo, zàijiàn!","うん、またね!"]
+    ],
+    usedWords: ["叫","新","同学","谢谢","爱","没事","再见","吧","什么"],
+    newWords: [{cn:"我",py:"wǒ",jp:"私"},{cn:"你",py:"nǐ",jp:"あなた"},{cn:"好",py:"hǎo",jp:"良い"},{cn:"名字",py:"míngzi",jp:"名前"},{cn:"是",py:"shì",jp:"〜である"},{cn:"很",py:"hěn",jp:"とても"},{cn:"高兴",py:"gāoxìng",jp:"嬉しい"},{cn:"认识",py:"rènshi",jp:"知り合う"},{cn:"也",py:"yě",jp:"〜も"},{cn:"了",py:"le",jp:"〜した(完了を表す助詞)"},{cn:"对",py:"duì",jp:"そうだ、正しい"},{cn:"学习",py:"xuéxí",jp:"勉強する"},{cn:"吗",py:"ma",jp:"〜か(疑問の助詞)"},{cn:"喜欢",py:"xǐhuan",jp:"好き"},{cn:"太好了",py:"tài hǎo le",jp:"良かった"},{cn:"啊",py:"a",jp:"あ(感嘆詞)"},{cn:"对不起",py:"duìbuqǐ",jp:"ごめんなさい"},{cn:"不小心",py:"bù xiǎoxīn",jp:"うっかり"},{cn:"撞到",py:"zhuàngdào",jp:"ぶつかる"}]
+  },
+  {
+    moduleId: "m1_5",
+    type: "对话",
+    title: "我的家人",
+    lines: [
+      ["A","这是谁?","zhè shì shéi?","これは誰?"],
+      ["B","这是我爸爸,他在公司工作。","zhè shì wǒ bàba, tā zài gōngsī gōngzuò.","これは父です、会社で働いています。"],
+      ["A","这是你弟弟吗?","zhè shì nǐ dìdi ma?","これは弟さん?"],
+      ["B","不是,这是我女儿,她今年五岁。","bú shì, zhè shì wǒ nǚ'ér, tā jīnnián wǔ suì.","違います、娘です。今年5歳です。"],
+      ["A","那这只狗呢?","nà zhè zhī gǒu ne?","じゃあこの犬は?"],
+      ["B","这是我们家的狗,它没有生病,很健康。","zhè shì wǒmen jiā de gǒu, tā méiyǒu shēngbìng, hěn jiànkāng.","うちの犬です、病気ではなく元気です。"],
+      ["A","你姐姐呢?她也工作吗?","nǐ jiějie ne? tā yě gōngzuò ma?","お姉さんは?お姉さんも働いてるの?"],
+      ["B","她工作,她是老师。我还有一个妹妹,她今年十岁。","tā gōngzuò, tā shì lǎoshī. wǒ hái yǒu yí ge mèimei, tā jīnnián shí suì.","働いています、先生です。妹もいて、今年10歳です。"],
+      ["A","你的家人真好!","nǐ de jiārén zhēn hǎo!","あなたの家族、いいですね!"]
+    ],
+    usedWords: ["谁","爸爸","公司","工作","弟弟","女儿","今年","狗","没有","生病","姐姐","妹妹","十"],
+    newWords: [{cn:"她",py:"tā",jp:"彼女"},{cn:"他",py:"tā",jp:"彼"},{cn:"不",py:"bù",jp:"〜ない"},{cn:"五",py:"wǔ",jp:"5"},{cn:"岁",py:"suì",jp:"〜歳"},{cn:"那",py:"nà",jp:"それでは、あの"},{cn:"只",py:"zhī",jp:"〜匹(量詞)"},{cn:"呢",py:"ne",jp:"〜は?(疑問の助詞)"},{cn:"家",py:"jiā",jp:"家"},{cn:"的",py:"de",jp:"〜の"},{cn:"还",py:"hái",jp:"さらに、まだ"},{cn:"有",py:"yǒu",jp:"ある、いる"},{cn:"一",py:"yī",jp:"1"},{cn:"个",py:"ge",jp:"〜個(量詞)"},{cn:"健康",py:"jiànkāng",jp:"健康である"},{cn:"真",py:"zhēn",jp:"本当に"},{cn:"家人",py:"jiārén",jp:"家族"}]
+  },
+  {
+    moduleId: "m1_5",
+    type: "日记",
+    title: "我的一天",
+    sentences: [
+      ["今天是星期六,早上六点,我就起床了。","jīntiān shì xīngqīliù, zǎoshang liù diǎn, wǒ jiù qǐchuáng le.","今日は土曜日、朝6時に起きました。"],
+      ["我吃了早饭:牛奶和米饭。","wǒ chī le zǎofàn: niúnǎi hé mǐfàn.","朝ご飯を食べました、牛乳とご飯です。"],
+      ["白天的时候,我和女朋友一起去店里买东西。","báitiān de shíhou, wǒ hé nǚpéngyou yìqǐ qù diàn lǐ mǎi dōngxi.","昼間、彼女と一緒にお店に買い物に行きました。"],
+      ["那家新开的店东西有点贵,不过很好。","nà jiā xīn kāi de diàn dōngxi yǒudiǎn guì, búguò hěn hǎo.","その新しい店は物がちょっと高いですが、良いです。"],
+      ["店里的女士对我们很好,她说:这是你们第一次来吗?","diàn lǐ de nǚshì duì wǒmen hěn hǎo, tā shuō: zhè shì nǐmen dì-yī cì lái ma?","店の女性が親切で、「初めてのご来店ですか?」と聞いてきました。"],
+      ["我们说:是,这是第一次。","wǒmen shuō: shì, zhè shì dì-yī cì.","私たちは「はい、初めてです」と言いました。"],
+      ["玩了一会儿,我们就去外边走走,外面的天气很好。","wán le yíhuìr, wǒmen jiù qù wàibian zǒuzou, wàimian de tiānqì hěn hǎo.","少し遊んで、外を散歩しました。外の天気は良かったです。"],
+      ["晚上八点,我给爸爸打电话,九点就睡觉了。","wǎnshang bā diǎn, wǒ gěi bàba dǎ diànhuà, jiǔ diǎn jiù shuìjiào le.","夜8時に父に電話して、9時には寝ました。"]
+    ],
+    usedWords: ["今天","星期","早","早上","点","给","早饭","牛奶","米饭","白天","时候","女朋友","店","新","贵","女士","第","外边","外","晚","电话","爸爸","九","玩","们","八"],
+    newWords: [{cn:"六",py:"liù",jp:"6"},{cn:"就",py:"jiù",jp:"すぐに、それで"},{cn:"起床",py:"qǐchuáng",jp:"起きる"},{cn:"吃",py:"chī",jp:"食べる"},{cn:"和",py:"hé",jp:"〜と"},{cn:"一起",py:"yìqǐ",jp:"一緒に"},{cn:"去",py:"qù",jp:"行く"},{cn:"里",py:"lǐ",jp:"〜の中"},{cn:"买",py:"mǎi",jp:"買う"},{cn:"东西",py:"dōngxi",jp:"もの"},{cn:"开",py:"kāi",jp:"開く、オープンする"},{cn:"不过",py:"búguò",jp:"しかし"},{cn:"说",py:"shuō",jp:"言う"},{cn:"次",py:"cì",jp:"〜回"},{cn:"来",py:"lái",jp:"来る"},{cn:"一会儿",py:"yíhuìr",jp:"少しの間"},{cn:"走",py:"zǒu",jp:"歩く"},{cn:"面",py:"miàn",jp:"〜の面、側"},{cn:"天气",py:"tiānqì",jp:"天気"},{cn:"上",py:"shang",jp:"〜(時間帯を表す接尾辞)"},{cn:"打",py:"dǎ",jp:"(電話を)かける"},{cn:"睡觉",py:"shuìjiào",jp:"寝る"}]
+  }
+];
+const passageModuleByEndCourse = { 5: "m1_5" };
+
 /* word id lookup: "sectionId-no" -> word (merged with cn/py for display) */
 function buildLookup(){
   const map = {};
@@ -54488,6 +54604,23 @@ function openSection(id){
     nextBtn.onclick = null;
   }
 
+  // 読み物(試作):この課がモジュールの区切りなら導線を表示
+  const readingLinkEl = document.getElementById('secReadingLink');
+  const moduleId = (typeof passageModuleByEndCourse !== 'undefined') ? passageModuleByEndCourse[id] : undefined;
+  if(moduleId && (typeof passagesData !== 'undefined') && passagesData.some(p=>p.moduleId===moduleId)){
+    const range = moduleId.replace('m','').replace('_','〜');
+    readingLinkEl.innerHTML = `<div class="reading-link" id="secReadingLinkBtn">
+      <div>
+        <div class="reading-link-title">📖 第${range}課のまとめ読み物を読む</div>
+        <div class="reading-link-sub">ここまでの単語を使った短い文章(試作)</div>
+      </div>
+      <div class="reading-link-arrow">›</div>
+    </div>`;
+    document.getElementById('secReadingLinkBtn').addEventListener('click', ()=> openReadingModule(moduleId, id));
+  } else {
+    readingLinkEl.innerHTML = '';
+  }
+
   if(!data){
     document.getElementById('secLocked').style.display = 'block';
     document.getElementById('secBody').style.display = 'none';
@@ -54701,6 +54834,78 @@ function switchView(id){
 document.getElementById('reviewCard').addEventListener('click', ()=>{
   openReview();
 });
+
+/* ===================== 読み物(試作) ===================== */
+function cnToWordId(cn){
+  const any = Object.values(wordLookup).find(w => w.cn===cn);
+  return any ? any.id : null;
+}
+
+function openReadingModule(moduleId, fromSectionId){
+  const items = passagesData.filter(p=>p.moduleId===moduleId);
+  if(!items.length) return;
+  document.getElementById('readingTitle').textContent = `読み物:${moduleId.replace('m','第').replace('_','〜')}課`;
+  switchView('view-reading');
+
+  const body = document.getElementById('readingBody');
+  body.innerHTML = items.map((p, pi)=>{
+    let contentHtml = '';
+    if(p.sentences){
+      contentHtml = p.sentences.map(s=>
+        `<div class="ex-item"><div class="ex-cn-row"><div class="ex-cn">${s[0]}</div><button class="speak-btn" data-text="${s[0].replace(/"/g,'&quot;')}" aria-label="発音を聞く">▶</button></div><div class="ex-py">${s[1]}</div><div class="ex-jp jp-hidden">${s[2]}</div></div>`
+      ).join('');
+    } else if(p.lines){
+      contentHtml = p.lines.map(l=>
+        `<div class="bubble ${l[0]}"><div class="cn-row"><div class="cn">${l[1]}</div><button class="speak-btn" data-text="${l[1].replace(/"/g,'&quot;')}" aria-label="発音を聞く">▶</button></div><div class="py">${l[2]}</div><div class="jp jp-hidden">${l[3]}</div></div>`
+      ).join('');
+    }
+
+    const wordsHtml = p.usedWords.length ? `<div class="passage-words">
+      <div class="passage-words-label">既習語(タップでカードへ)</div>
+      ${p.usedWords.map(w=>`<span class="passage-word-chip" data-cn="${w}">${w}</span>`).join('')}
+    </div>` : '';
+
+    const newWordsHtml = (p.newWords && p.newWords.length) ? `<div class="passage-newwords">
+      <div class="passage-newwords-label">新出語</div>
+      ${p.newWords.map(w=>`<div class="newword-row"><span class="newword-cn">${w.cn}</span><span class="newword-py">${w.py}</span><span class="newword-jp">${w.jp}</span></div>`).join('')}
+    </div>` : '';
+
+    return `<div class="passage-card" data-idx="${pi}">
+      <div class="passage-head">
+        <span class="passage-type">${p.type}</span><span class="passage-title">${p.title}</span>
+        <button class="jp-toggle" data-idx="${pi}">日本語訳を表示</button>
+      </div>
+      ${contentHtml}
+      ${wordsHtml}
+      ${newWordsHtml}
+    </div>`;
+  }).join('');
+
+  body.querySelectorAll('.jp-toggle').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const card = btn.closest('.passage-card');
+      const hidden = card.querySelectorAll('.jp-hidden, .jp.jp-hidden');
+      const isOn = btn.classList.toggle('on');
+      card.querySelectorAll('.ex-jp, .bubble .jp').forEach(el=> el.classList.toggle('jp-hidden', !isOn));
+      btn.textContent = isOn ? '日本語訳を隠す' : '日本語訳を表示';
+    });
+  });
+
+  body.querySelectorAll('.passage-word-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      const id = cnToWordId(chip.dataset.cn);
+      if(id){
+        const sectionId = Number(id.split('-')[0]);
+        openSection(sectionId);
+      }
+    });
+  });
+
+  document.getElementById('backFromReading').onclick = ()=>{
+    if(fromSectionId){ openSection(fromSectionId); } else { switchView('view-home'); }
+  };
+}
+
 document.getElementById('backFromSection').addEventListener('click', ()=>{ renderHome(); switchView('view-home'); });
 document.getElementById('backFromReview').addEventListener('click', ()=>{ renderHome(); switchView('view-home'); });
 
