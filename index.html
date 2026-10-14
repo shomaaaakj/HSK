@@ -306,7 +306,7 @@
   <!-- HOME -->
   <div class="view active" id="view-home">
     <div class="review-card" id="reviewCard">
-      <div class="review-stamp">復</div>
+      <div class="review-stamp" id="reviewStamp">復</div>
       <div>
         <div class="review-title">苦手単語の復習</div>
         <div class="review-sub" id="reviewSub">読み込み中…</div>
@@ -54721,7 +54721,7 @@ function dueReviewList(){
   const maint = dueAll.filter(w => w.box > 5).sort((a,b)=> String(a.last).localeCompare(String(b.last))).slice(0, MAINT_DAILY_CAP);
   const due = weak.concat(maint)
     .map(w => Object.assign({}, w, {
-      missInfo: `${w.box > 5 ? '定着チェック' : `Lv.${w.box}/5`} ・ 重要度${'★'.repeat(w.freq||3)}${'☆'.repeat(5-(w.freq||3))}`
+      missInfo: `${w.box > 5 ? '定着チェック' : `Lv.${w.box}/5`} ・ 重要度${'★'.repeat(Math.min(5, Math.max(0, w.freq||3)))}${'☆'.repeat(Math.max(0, 5-(w.freq||3)))}`
     }));
   return { all, due, today };
 }
@@ -54850,6 +54850,65 @@ function switchView(id){
 document.getElementById('reviewCard').addEventListener('click', ()=>{
   openReview();
 });
+
+/* デバッグ用:「復」のスタンプを5回連続タップすると、復習データの診断情報を表示する
+   (実機でのみ再現する不具合の原因調査用。通常の操作では出てこない) */
+(function(){
+  let tapCount = 0;
+  let tapTimer = null;
+  document.getElementById('reviewStamp').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    tapCount++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(()=>{ tapCount = 0; }, 1500);
+    if(tapCount >= 5){
+      tapCount = 0;
+      showReviewDebugInfo();
+    }
+  });
+})();
+function showReviewDebugInfo(){
+  try{
+    const reviewObj = appState.review || {};
+    const ids = Object.keys(reviewObj);
+    const lk = buildLookup();
+    let matched = 0, unmatched = 0;
+    const unmatchedSample = [];
+    const entrySample = [];
+    const today = todayStr();
+    let dueCount = 0, futureCount = 0, badTypeCount = 0;
+    ids.forEach((id, i)=>{
+      const r = reviewObj[id];
+      const w = lk[id];
+      if(w) matched++; else { unmatched++; if(unmatchedSample.length < 5) unmatchedSample.push(id); }
+      const dueIsStr = typeof r.due === 'string';
+      const lastIsStr = typeof r.last === 'string';
+      if(!dueIsStr || (r.last !== undefined && !lastIsStr)) badTypeCount++;
+      if(dueIsStr && r.due <= today) dueCount++; else futureCount++;
+      if(i < 5) entrySample.push(`${id}: box=${JSON.stringify(r.box)} due=${JSON.stringify(r.due)}(${typeof r.due}) last=${JSON.stringify(r.last)}(${typeof r.last}) misses=${JSON.stringify(r.misses)}`);
+    });
+    let localStorageRaw = null, localStorageErr = null;
+    try{ localStorageRaw = localStorage.getItem(STORAGE_KEY); }catch(e){ localStorageErr = e.message; }
+    const rawLen = localStorageRaw ? localStorageRaw.length : 0;
+    const { all, due } = dueReviewList();
+    const msg = [
+      `appState.review 件数: ${ids.length}`,
+      `wordLookup 一致: ${matched} / 不一致: ${unmatched}`,
+      unmatched > 0 ? `不一致サンプル: ${unmatchedSample.join(', ')}` : '',
+      `due型が不正/last型が不正: ${badTypeCount}件`,
+      `今日(${today})以前のdue: ${dueCount} / それ以外: ${futureCount}`,
+      `dueReviewList() all=${all.length} due=${due.length}`,
+      `localStorage生データ長: ${rawLen}文字 ${localStorageErr ? '(読込エラー: '+localStorageErr+')' : ''}`,
+      `appStateとlocalStorageの件数差: appState=${ids.length}件 / localStorage内review件数=${(()=>{ try{ return Object.keys(JSON.parse(localStorageRaw).review||{}).length; }catch(e){ return 'parse失敗: '+e.message; } })()}`,
+      '--- サンプル(先頭5件) ---',
+      ...entrySample
+    ].filter(Boolean).join('\n');
+    alert(msg);
+    console.log(msg);
+  }catch(e){
+    alert('診断中にエラー: ' + e.message + '\n' + e.stack);
+  }
+}
 
 /* ===================== 読み物(試作) ===================== */
 function cnToWordId(cn){
