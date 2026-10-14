@@ -54696,19 +54696,29 @@ function dueReviewList(){
   const today = todayStr();
   const all = Object.keys(appState.review)
     .map(id => {
-      const w = wordLookup[id];
-      if(!w) return null;
-      const r = appState.review[id];
-      // last: 最終学習日時。旧データ(このフィールド導入前に記録されたもの)には無いので、
-      // その場合は due 日付をフォールバックとして使う(概算だが「古いものが先」という並びは保てる)。
-      return Object.assign({}, w, { box: r.box, due: r.due, misses: r.misses || 1, last: r.last || r.due });
+      try{
+        const w = wordLookup[id];
+        if(!w) return null;
+        const r = appState.review[id] || {};
+        // last: 最終学習日時。旧データ(このフィールド導入前に記録されたもの)には無い場合や、
+        // 型が壊れている場合もあるため、必ず安全な文字列にフォールバックする
+        // (概算だが「古いものが先」という並びは保てる)。
+        const safeDue = (typeof r.due === 'string' && r.due) ? r.due : today;
+        const rawLast = r.last || r.due;
+        const safeLast = (typeof rawLast === 'string' && rawLast) ? rawLast : String(rawLast || safeDue || today);
+        const safeBox = (typeof r.box === 'number' && isFinite(r.box)) ? r.box : 1;
+        return Object.assign({}, w, { box: safeBox, due: safeDue, misses: r.misses || 1, last: safeLast });
+      }catch(e){
+        console.warn('dueReviewList: skipping malformed review entry', id, e);
+        return null;
+      }
     })
     .filter(Boolean);
   const dueAll = all.filter(w => w.due <= today);
   // 苦手(box低い)優先は維持しつつ、同じboxの中では最終学習日時が古いものから出す。
-  const weak = dueAll.filter(w => w.box <= 5).sort((a,b)=> (a.box - b.box) || a.last.localeCompare(b.last));
+  const weak = dueAll.filter(w => w.box <= 5).sort((a,b)=> (a.box - b.box) || String(a.last).localeCompare(String(b.last)));
   const MAINT_DAILY_CAP = 3; // 定着チェック(箱6以降)は1日にこれ以上出さない。苦手な単語の練習が薄まらないように優先度を下げる。
-  const maint = dueAll.filter(w => w.box > 5).sort((a,b)=> a.last.localeCompare(b.last)).slice(0, MAINT_DAILY_CAP);
+  const maint = dueAll.filter(w => w.box > 5).sort((a,b)=> String(a.last).localeCompare(String(b.last))).slice(0, MAINT_DAILY_CAP);
   const due = weak.concat(maint)
     .map(w => Object.assign({}, w, {
       missInfo: `${w.box > 5 ? '定着チェック' : `Lv.${w.box}/5`} ・ 重要度${'★'.repeat(w.freq||3)}${'☆'.repeat(5-(w.freq||3))}`
@@ -54717,17 +54727,23 @@ function dueReviewList(){
 }
 
 function updateReviewBadge(){
-  const { all, due } = dueReviewList();
   const card = document.getElementById('reviewCard');
   const sub = document.getElementById('reviewSub');
-  if(due.length > 0){
-    sub.textContent = `今日復習できる単語:${due.length}個`;
-    card.classList.remove('empty');
-  } else if(all.length > 0){
-    const nearest = all.map(w=>w.due).sort()[0];
-    sub.textContent = `今日の分はありません(次は${nearest})`;
-    card.classList.add('empty');
-  } else {
+  try{
+    const { all, due } = dueReviewList();
+    if(due.length > 0){
+      sub.textContent = `今日復習できる単語:${due.length}個`;
+      card.classList.remove('empty');
+    } else if(all.length > 0){
+      const nearest = all.map(w=>w.due).sort()[0];
+      sub.textContent = `今日の分はありません(次は${nearest})`;
+      card.classList.add('empty');
+    } else {
+      sub.textContent = '苦手単語はまだありません';
+      card.classList.add('empty');
+    }
+  }catch(e){
+    console.warn('updateReviewBadge failed', e);
     sub.textContent = '苦手単語はまだありません';
     card.classList.add('empty');
   }
