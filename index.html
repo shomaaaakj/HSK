@@ -280,7 +280,10 @@
   .newword-cn{font-weight:600;}
   .newword-py{color:var(--jade-deep);}
   .newword-jp{color:var(--ink-soft);}
-  .speak-btn{
+  .review-next-note{font-size:12px;color:var(--ink-soft);margin:14px 0 8px;}
+.review-next-btn{margin-top:4px;}
+.review-stats{font-size:11px;color:var(--ink-soft);margin-top:4px;line-height:1.5;}
+.speak-btn{
     display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; flex-shrink:0;
     border-radius:50%; border:1.5px solid var(--line); background:rgba(255,255,255,0.4);
     color:var(--jade-deep); cursor:pointer; font-size:12px; line-height:1;
@@ -310,6 +313,7 @@
       <div>
         <div class="review-title">苦手単語の復習</div>
         <div class="review-sub" id="reviewSub">読み込み中…</div>
+        <div class="review-stats" id="reviewStats"></div>
       </div>
     </div>
     <div class="goal-card" id="goalCard">
@@ -413,7 +417,7 @@
   <p class="no-voice-note" id="storageNote">⚠ このブラウザでは保存ができないようです(プライベートブラウズ中など)。今回だけは進捗が保存されない可能性があります。</p>
 </main>
 
-<footer>語階HSK ・ 進捗はこのブラウザに保存されます ・ v2026.10.15-audio2</footer>
+<footer>語階HSK ・ 進捗はこのブラウザに保存されます ・ v2026.10.20-review3</footer>
 
 <script>
 /* ===================== セクション一覧(骨格) ===================== */
@@ -54116,8 +54120,6 @@ let wordLookup = buildLookup();
    ずっと時々確認し続ける(完全には記録を消さない=知っていると判定した単語も後で洗い出される)。
    知らない→箱1に戻り、即日また出す。
    単語カード・テスト・復習、どこで判定しても同じ仕組みに記録される。 */
-const INTERVAL_DAYS = {1:0, 2:1, 3:3, 4:7, 5:14, 6:30, 7:60, 8:120};
-const MAX_BOX = 8;
 function todayStr(){
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -54130,25 +54132,160 @@ function addDaysStr(dateStr, days){
 function nowTs(){
   return new Date().toISOString();
 }
-function recordAssessment(id, isKnown){
+
+/* ===================== 復習エンジン(v2:忘却曲線ベース) =====================
+   ・記録するのは「課のテスト」と「復習」の判定だけ(単語カードの判定は練習扱いで記録しない)
+   ・テストで分かる → 既知(state:'known')。毎日の復習には出さない
+   ・テストで分からない → 苦手(state:'learning')。今日から復習
+   ・苦手の間隔は「前回 × 伸び率」。伸び率は間違えた回数で変える(1回3.0/2回2.5/3回以上2.0)
+   ・卒業に必要な正解回数はHSKの級で変える(重要HSK1-4/標準HSK5-6/低HSK7-9)
+   ・復習で間違えたら:間違い回数+1、その日のうちに正解するまで繰り返す(その日の正解は数えない)、
+     翌日に確認 → 正解なら「間違える前の間隔の半分」から再開。それまでの正解回数は残す
+   ・予定より遅れて正解したら、実際に空いた日数を基準に次の間隔を決める(予定の2倍まで) */
+const GRAD_NEED = {
+  core: [4, 5, 7],  // 重要(HSK1〜4):間違い1回 / 2回 / 3回以上
+  std:  [3, 4, 6],  // 標準(HSK5〜6)
+  low:  [3, 3, 5],  // 低(HSK7〜9)
+};
+const TIER_LABEL = { core:'重要', std:'標準', low:'低' };
+function sectionLevel(sectionId){
+  const meta = sectionsMeta.find(s=>s.id===Number(sectionId));
+  return meta ? meta.level : 1;
+}
+function levelOfWordId(id){ return sectionLevel(String(id).split('-')[0]); }
+function tierOfLevel(lv){ return lv <= 4 ? 'core' : (lv <= 6 ? 'std' : 'low'); }
+function levelLabel(lv){ return lv >= 7 ? 'HSK7-9級' : `HSK${lv}級`; }
+function growthFor(misses){ return misses <= 1 ? 3.0 : (misses === 2 ? 2.5 : 2.0); }
+function needFor(id, misses){
+  const t = GRAD_NEED[tierOfLevel(levelOfWordId(id))];
+  return t[Math.min(Math.max(misses,1),3) - 1];
+}
+function daysBetween(a, b){ // 'YYYY-MM-DD' 同士の日数差(b - a)
+  const da = new Date(a + 'T00:00:00'), db = new Date(b + 'T00:00:00');
+  return Math.round((db - da) / 86400000);
+}
+function dateOfTs(ts){
+  if(typeof ts !== 'string' || !ts) return null;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(ts)) return ts;
+  const d = new Date(ts); if(isNaN(d)) return null;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function makeKnown(prevMisses){
   const today = todayStr();
-  const now = nowTs();
+  return { state:'known', knownAt: today, lastCheck: today, misses: prevMisses || 0 };
+}
+function startLearning(misses){
+  const today = todayStr();
+  return { state:'learning', misses, succ:0, iv:1, due: today, last: nowTs(), lastDate: today,
+           relearn:false, prevIv:1, lapsedOn: today };
+}
+function applyLapse(r){
+  const today = todayStr();
+  if(r.lapsedOn === today) return r; // 同じ日に何度間違えても、数えるのは1回
+  r.misses = (r.misses || 0) + 1;
+  r.prevIv = r.iv || 1;
+  r.relearn = true;
+  r.iv = 1;
+  r.due = today;
+  r.lapsedOn = today;
+  r.last = nowTs(); r.lastDate = today;
+  return r;
+}
+function applySuccess(id, r){
+  const today = todayStr();
+  r.last = nowTs();
+  if(r.lapsedOn === today){
+    // その日に間違えた単語を、その場で言い直して正解した → 成功には数えず、翌日に確認
+    r.iv = 1; r.due = addDaysStr(today, 1); r.lastDate = today;
+    return r;
+  }
+  if(r.relearn){
+    // 間違えた翌日の確認に正解 → 間違える前の間隔の半分から再開(正解回数には数えない)
+    r.relearn = false;
+    r.iv = Math.max(1, Math.round((r.prevIv || 1) * 0.5));
+    r.due = addDaysStr(today, r.iv); r.lastDate = today;
+    return r;
+  }
+  const elapsed = r.lastDate ? daysBetween(r.lastDate, today) : (r.iv || 1);
+  const planned = r.iv || 1;
+  const base = elapsed > planned ? Math.min(elapsed, planned * 2) : planned;
+  r.succ = (r.succ || 0) + 1;
+  if(r.succ >= needFor(id, r.misses || 1)){
+    return makeKnown(r.misses); // 卒業 → 既知リストへ
+  }
+  r.iv = Math.max(1, Math.round(base * growthFor(r.misses || 1)));
+  r.due = addDaysStr(today, r.iv); r.lastDate = today;
+  return r;
+}
+function logTestResult(isKnown){
+  if(!appState.stats) appState.stats = { tests:{} };
+  if(!appState.stats.tests) appState.stats.tests = {};
+  const d = todayStr();
+  const t = appState.stats.tests[d] || { ok:0, ng:0 };
+  if(isKnown) t.ok++; else t.ng++;
+  appState.stats.tests[d] = t;
+}
+/* 課のテストの判定 */
+function recordTest(id, isKnown){
+  logTestResult(isKnown);
   const prev = appState.review[id];
-  if(isKnown){
-    if(!prev){
-      // 初めて「分かる」と判定された単語も、間隔反復に登録して後日また確認する
-      appState.review[id] = { box:1, due: addDaysStr(today,1), misses:0, last: now };
-    } else {
-      const newBox = Math.min(prev.box + 1, MAX_BOX);
-      appState.review[id] = { box:newBox, due: addDaysStr(today, INTERVAL_DAYS[newBox]), misses: prev.misses, last: now };
-    }
+  if(!prev){
+    appState.review[id] = isKnown ? makeKnown(0) : startLearning(1);
+  } else if(prev.state === 'known'){
+    if(isKnown){ prev.lastCheck = todayStr(); }
+    else { appState.review[id] = startLearning((prev.misses || 0) + 1); }
   } else {
-    appState.review[id] = { box:1, due: today, misses: (prev ? prev.misses : 0) + 1, last: now };
+    // 苦手リストの単語:分かる → 予定どおり(変更なし)/分からない → 間違い扱い
+    if(!isKnown) appState.review[id] = applyLapse(prev);
   }
   saveState(); updateReviewBadge();
 }
+/* 復習の判定 */
+function recordReview(id, isKnown){
+  const prev = appState.review[id];
+  if(!prev || prev.state !== 'learning') return;
+  // 今日すでに復習済みで、次の予定日が先の単語(「もう一度復習する」でのやり直し等)は、
+  // 正解しても回数に数えない。間違えた場合だけ記録する
+  if(isKnown && prev.due > todayStr() && prev.lastDate === todayStr()) return;
+  appState.review[id] = isKnown ? applySuccess(id, prev) : applyLapse(prev);
+  saveState(); updateReviewBadge();
+}
+/* 旧形式(箱1〜8)からの移行。最初に新しい版を開いたときに一度だけ実行 */
+const OLD_INTERVAL = {1:1, 2:1, 3:3, 4:7, 5:14, 6:30, 7:60, 8:120};
+function migrateReviewV2(){
+  if((appState.schema || 1) >= 2) return;
+  const today = todayStr();
+  Object.keys(appState.review || {}).forEach(id=>{
+    const r = appState.review[id];
+    if(!r || r.state) return;
+    const misses = Number(r.misses) || 0;
+    const lastD = dateOfTs(r.last) || dateOfTs(r.due) || today;
+    if(misses <= 0){
+      appState.review[id] = { state:'known', knownAt:lastD, lastCheck:lastD, misses:0 };
+      return;
+    }
+    const box = (typeof r.box === 'number' && isFinite(r.box)) ? Math.min(Math.max(r.box,1),8) : 1;
+    const succ = box - 1;
+    if(succ >= needFor(id, misses)){
+      appState.review[id] = { state:'known', knownAt:lastD, lastCheck:lastD, misses };
+      return;
+    }
+    appState.review[id] = { state:'learning', misses, succ, iv: OLD_INTERVAL[box],
+      due: dateOfTs(r.due) || today, last: (typeof r.last==='string' ? r.last : nowTs()), lastDate: lastD,
+      relearn:false, prevIv: OLD_INTERVAL[box], lapsedOn: null };
+  });
+  appState.schema = 2;
+  saveState();
+}
+function testMissRate7d(){
+  const tests = (appState.stats && appState.stats.tests) || {};
+  const today = todayStr();
+  let ok=0, ng=0;
+  Object.keys(tests).forEach(d=>{ const diff = daysBetween(d, today); if(diff>=0 && diff<7){ ok+=tests[d].ok||0; ng+=tests[d].ng||0; } });
+  return (ok+ng) ? Math.round(ng/(ok+ng)*100) : null;
+}
 
-let appState = { progress: {}, review: {}, speechRate: 0.78 };
+let appState = { progress: {}, review: {}, speechRate: 0.78, stats: { tests:{} }, schema: 2 };
 const STORAGE_KEY = 'chinese500-app-state';
 async function loadState(){
   try{
@@ -54157,6 +54294,8 @@ async function loadState(){
       const loaded = JSON.parse(raw);
       appState.progress = loaded.progress || {};
       appState.speechRate = typeof loaded.speechRate === 'number' ? loaded.speechRate : 0.78;
+      appState.stats = loaded.stats || { tests:{} };
+      appState.schema = loaded.schema || 1;
       if(loaded.review){
         appState.review = loaded.review;
       } else if(loaded.missCounts){
@@ -54173,6 +54312,7 @@ async function loadState(){
   }catch(e){
     console.warn('load failed', e);
   }
+  try{ migrateReviewV2(); }catch(e){ console.warn('migrate failed', e); }
 }
 
 let saveTimer = null;
@@ -54669,7 +54809,7 @@ function openSection(id){
     fillEl: document.getElementById('vocabFill'),
     subEl: document.getElementById('vocabSub'),
     items: words, richBack: true, autoSpeak: false, progressive: true,
-    onCommit: (w, isKnown)=> recordAssessment(w.id, isKnown),
+    onCommit: null, // 単語カードの判定は練習扱い(記録しない)
     onComplete: ()=>{ setProgress(id, 'vocab', true); }
   });
 
@@ -54680,7 +54820,7 @@ function openSection(id){
     fillEl: document.getElementById('quizFill'),
     subEl: document.getElementById('quizSub'),
     items: words, richBack: false, autoSpeak: false, direct: true,
-    onCommit: (w, isKnown)=> recordAssessment(w.id, isKnown),
+    onCommit: (w, isKnown)=> recordTest(w.id, isKnown),
     onComplete: ()=>{ setProgress(id, 'test', true); }
   });
 
@@ -54725,43 +54865,44 @@ function dueReviewList(){
   if(!appState.review) appState.review = {};
   wordLookup = buildLookup();
   const today = todayStr();
-  const all = Object.keys(appState.review)
-    .map(id => {
-      try{
-        const w = wordLookup[id];
-        if(!w) return null;
-        const r = appState.review[id] || {};
-        // last: 最終学習日時。旧データ(このフィールド導入前に記録されたもの)には無い場合や、
-        // 型が壊れている場合もあるため、必ず安全な文字列にフォールバックする
-        // (概算だが「古いものが先」という並びは保てる)。
-        const safeDue = (typeof r.due === 'string' && r.due) ? r.due : today;
-        const rawLast = r.last || r.due;
-        const safeLast = (typeof rawLast === 'string' && rawLast) ? rawLast : String(rawLast || safeDue || today);
-        const safeBox = (typeof r.box === 'number' && isFinite(r.box)) ? r.box : 1;
-        return Object.assign({}, w, { box: safeBox, due: safeDue, misses: r.misses || 1, last: safeLast });
-      }catch(e){
-        console.warn('dueReviewList: skipping malformed review entry', id, e);
-        return null;
-      }
-    })
-    .filter(Boolean);
-  const dueAll = all.filter(w => w.due <= today);
-  // 苦手(box低い)優先は維持しつつ、同じboxの中では最終学習日時が古いものから出す。
-  const weak = dueAll.filter(w => w.box <= 5).sort((a,b)=> (a.box - b.box) || String(a.last).localeCompare(String(b.last)));
-  const MAINT_DAILY_CAP = 3; // 定着チェック(箱6以降)は1日にこれ以上出さない。苦手な単語の練習が薄まらないように優先度を下げる。
-  const maint = dueAll.filter(w => w.box > 5).sort((a,b)=> String(a.last).localeCompare(String(b.last))).slice(0, MAINT_DAILY_CAP);
-  const due = weak.concat(maint)
-    .map(w => Object.assign({}, w, {
-      missInfo: `${w.box > 5 ? '定着チェック' : `Lv.${w.box}/5`} ・ 重要度${'★'.repeat(Math.min(5, Math.max(0, w.freq||3)))}${'☆'.repeat(Math.max(0, 5-(w.freq||3)))}`
-    }));
-  return { all, due, today };
+  let knownCount = 0;
+  const all = [];
+  Object.keys(appState.review).forEach(id=>{
+    try{
+      const r = appState.review[id];
+      if(!r) return;
+      if(r.state === 'known'){ knownCount++; return; }
+      if(r.state !== 'learning') return;
+      const w = wordLookup[id];
+      if(!w) return;
+      const due = (typeof r.due === 'string' && r.due) ? r.due : today;
+      const lastDate = (typeof r.lastDate === 'string' && r.lastDate) ? r.lastDate : due;
+      all.push(Object.assign({}, w, { due, lastDate, iv: r.iv || 1, succ: r.succ || 0, misses: r.misses || 1 }));
+    }catch(e){ console.warn('dueReviewList: skip', id, e); }
+  });
+  // 予定日を過ぎた度合い(経過日数 ÷ 予定の間隔)が大きい単語から出す。上限なし
+  const due = all.filter(w => w.due <= today)
+    .map(w => Object.assign({}, w, { overdue: daysBetween(w.lastDate, today) / Math.max(1, w.iv) }))
+    .sort((a,b)=> b.overdue - a.overdue)
+    .map(w => {
+      const lv = levelOfWordId(w.id);
+      return Object.assign({}, w, {
+        missInfo: `${levelLabel(lv)}・${TIER_LABEL[tierOfLevel(lv)]} ・ 卒業まで ${w.succ}/${needFor(w.id, w.misses)}回`
+      });
+    });
+  return { all, due, today, knownCount };
 }
 
 function updateReviewBadge(){
   const card = document.getElementById('reviewCard');
   const sub = document.getElementById('reviewSub');
   try{
-    const { all, due } = dueReviewList();
+    const { all, due, knownCount } = dueReviewList();
+    const statsEl = document.getElementById('reviewStats');
+    if(statsEl){
+      const mr = testMissRate7d();
+      statsEl.textContent = `苦手 ${all.length}語 ・ 既知 ${knownCount}語 ・ 直近7日のテスト誤答率 ${mr === null ? '—' : mr + '%'}`;
+    }
     if(due.length > 0){
       sub.textContent = `今日復習できる単語:${due.length}個`;
       card.classList.remove('empty');
@@ -54800,9 +54941,22 @@ function openReview(){
     subEl: document.getElementById('reviewSub2'),
     items: chunk, richBack: true, autoSpeak: false, progressive: true,
     emptyMessage: emptyMsg,
-    onCommit: (w, isKnown)=> recordAssessment(w.id, isKnown),
+    onCommit: (w, isKnown)=> recordReview(w.id, isKnown),
     onComplete: ()=>{
-      if(dueReviewList().due.length > 0){ setTimeout(openReview, 300); } // 今日の分の続きへ
+      // 自動で次の分へは進まない(テスト・例文・会話タブで確認できるように)。ボタンで進む
+      const remain = dueReviewList().due.length;
+      const done = document.querySelector('#reviewStage .deck-done');
+      if(remain > 0 && done && !done.querySelector('.review-next-btn')){
+        const note = document.createElement('p');
+        note.className = 'review-next-note';
+        note.textContent = 'テスト・例文・会話タブで確認してから、次へ進めます。';
+        const btn = document.createElement('button');
+        btn.className = 'deck-restart review-next-btn';
+        btn.textContent = `次の復習へ進む(残り${remain}語)`;
+        btn.addEventListener('click', ()=>{ openReview(); window.scrollTo(0,0); });
+        done.appendChild(note);
+        done.appendChild(btn);
+      }
     }
   });
 
@@ -54814,7 +54968,7 @@ function openReview(){
     subEl: document.getElementById('reviewQuizSub'),
     items: chunk, richBack: false, autoSpeak: false, direct: true,
     emptyMessage: emptyMsg,
-    onCommit: (w, isKnown)=> recordAssessment(w.id, isKnown)
+    onCommit: null // 復習画面のテストは確認用(記録は単語カード側で行う)
   });
 
   // 例文(各単語の出身課から該当分だけ抽出)
@@ -54916,7 +55070,7 @@ function showReviewDebugInfo(){
       const lastIsStr = typeof r.last === 'string';
       if(!dueIsStr || (r.last !== undefined && !lastIsStr)) badTypeCount++;
       if(dueIsStr && r.due <= today) dueCount++; else futureCount++;
-      if(i < 5) entrySample.push(`${id}: box=${JSON.stringify(r.box)} due=${JSON.stringify(r.due)}(${typeof r.due}) last=${JSON.stringify(r.last)}(${typeof r.last}) misses=${JSON.stringify(r.misses)}`);
+      if(i < 5) entrySample.push(`${id}: state=${r.state} succ=${r.succ} iv=${r.iv} due=${JSON.stringify(r.due)}(${typeof r.due}) last=${JSON.stringify(r.last)}(${typeof r.last}) misses=${JSON.stringify(r.misses)}`);
     });
     let localStorageRaw = null, localStorageErr = null;
     try{ localStorageRaw = localStorage.getItem(STORAGE_KEY); }catch(e){ localStorageErr = e.message; }
